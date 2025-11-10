@@ -29,6 +29,15 @@ if supabase is None:
 
 # Главное меню
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
+    username = update.message.from_user.username or "Не указан"
+    full_name = f"{update.message.from_user.first_name or ''} {update.message.from_user.last_name or ''}".strip()
+
+    # Автоматически обновляем информацию об администраторах
+    if DatabaseManager.is_admin(user_id):
+        DatabaseManager.update_admin_info(user_id, username, full_name)
+        logger.info(f"✅ Обновлены данные админа: {user_id} - {full_name} (@{username})")
+
     keyboard = [
         [InlineKeyboardButton("🍽 Меню", callback_data='menu')],
         [InlineKeyboardButton("📋 Лист", callback_data='sheet')],
@@ -41,7 +50,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text('Выберите опцию:', reply_markup=reply_markup)
     else:
         await update.callback_query.edit_message_text('Выберите опцию:', reply_markup=reply_markup)
-
 
 # Обработчик нажатий на кнопки
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -282,7 +290,7 @@ async def show_seating(query):
 
 # --- КОМАНДЫ ДЛЯ АДМИНИСТРИРОВАНИЯ ---
 async def add_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Добавить администратора"""
+    """Добавить администратора с автоматическим получением данных"""
     user_id = update.message.from_user.id
 
     # Проверяем, что текущий пользователь - админ
@@ -300,16 +308,42 @@ async def add_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         new_admin_id = int(context.args[0])
-        username = update.message.from_user.username or "Не указан"
-        full_name = f"{update.message.from_user.first_name or ''} {update.message.from_user.last_name or ''}".strip()
+
+        # Пытаемся получить информацию о пользователе через Telegram API
+        try:
+            bot = context.bot
+            user = await bot.get_chat(new_admin_id)
+
+            username = user.username or "Не указан"
+            full_name = f"{user.first_name or ''} {user.last_name or ''}".strip()
+            if not full_name:
+                full_name = "Не указано"
+
+            user_info = f"👤 Имя: {full_name}\n📱 Username: @{username}"
+
+        except Exception as e:
+            # Если не удалось получить данные (пользователь не писал боту или скрыт)
+            logger.warning(f"Не удалось получить данные пользователя {new_admin_id}: {e}")
+            username = "Не указан"
+            full_name = "Не указано"
+            user_info = "⚠️ Не удалось получить данные пользователя. Они обновятся когда пользователь напишет боту."
+
+        # Проверяем, не является ли пользователь уже админом
+        if DatabaseManager.is_admin(new_admin_id):
+            await update.message.reply_text("❌ Этот пользователь уже является администратором.")
+            return
 
         # Добавляем в базу
         success = DatabaseManager.add_admin(new_admin_id, username, full_name)
 
         if success:
-            await update.message.reply_text(f"✅ Пользователь {new_admin_id} добавлен как администратор!")
+            await update.message.reply_text(
+                f"✅ Администратор успешно добавлен!\n\n"
+                f"🆔 ID: {new_admin_id}\n"
+                f"{user_info}"
+            )
         else:
-            await update.message.reply_text("❌ Ошибка при добавлении администратора.")
+            await update.message.reply_text("❌ Ошибка при добавлении администратора в базу данных.")
 
     except ValueError:
         await update.message.reply_text("❌ Неверный формат user_id. user_id должен быть числом.")
@@ -319,7 +353,7 @@ async def add_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def list_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показать список администраторов"""
+    """Показать список администраторов с актуальными данными"""
     user_id = update.message.from_user.id
 
     if not DatabaseManager.is_admin(user_id):
@@ -333,12 +367,17 @@ async def list_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     admin_list = "📋 Список администраторов:\n\n"
-    for admin in admins:
-        admin_list += f"🆔 ID: {admin['user_id']}\n"
-        admin_list += f"👤 Имя: {admin.get('full_name', 'Не указано')}\n"
-        admin_list += f"📱 Username: @{admin.get('username', 'Не указан')}\n"
-        admin_list += f"📅 Добавлен: {admin.get('created_at', 'Неизвестно')[:10]}\n"
-        admin_list += "─" * 20 + "\n"
+    for i, admin in enumerate(admins, 1):
+        admin_list += f"{i}. 🆔 ID: {admin['user_id']}\n"
+        admin_list += f"   👤 Имя: {admin.get('full_name', 'Не указано')}\n"
+        admin_list += f"   📱 Username: @{admin.get('username', 'Не указан')}\n"
+
+        # Показываем когда обновлялись данные
+        if admin.get('created_at'):
+            created = admin['created_at'][:10]  # Берем только дату
+            admin_list += f"   📅 Добавлен: {created}\n"
+
+        admin_list += "   " + "─" * 25 + "\n"
 
     await update.message.reply_text(admin_list)
 

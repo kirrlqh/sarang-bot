@@ -146,6 +146,21 @@ class DatabaseManager:
             return False
 
     @staticmethod
+    def update_admin_info(user_id, username="", full_name=""):
+        """Обновить информацию об администраторе"""
+        try:
+            response = supabase.table("admins").update({
+                "username": username,
+                "full_name": full_name
+            }).eq("user_id", user_id).execute()
+
+            print(f"✅ Информация администратора {user_id} обновлена")
+            return True
+        except Exception as e:
+            print(f"❌ Ошибка при обновлении информации администратора: {e}")
+            return False
+
+    @staticmethod
     def get_all_admins():
         """Получить всех администраторов"""
         try:
