@@ -107,7 +107,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['selected_table'] = table_number
         context.user_data['waiting_for_feedback'] = True
         await query.edit_message_text(
-            text=f"🪑 Выбран стол: {table_number}\n\n💬 Теперь напишите ваш отзыв, предложение или жалобу:")
+            text=f"🪑 Выбран стол: {table_number:02d}\n\n💬 Теперь напишите ваш отзыв, предложение или жалобу:")
 
     elif data == 'view_feedback':
         if not DatabaseManager.is_admin(query.from_user.id):
@@ -140,6 +140,10 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await show_categories(query)
     elif data == 'back_feedback':
         await show_feedback_options(query)
+    elif data == 'back_sheet':
+        await show_sheet_options(query)
+    elif data == 'back_schedule':
+        await show_schedule_options(query)
 
 
 # --- ФУНКЦИИ ДЛЯ МЕНЮ ---
@@ -175,7 +179,7 @@ async def show_dishes(query, category_id):
     categories = DatabaseManager.get_categories()
     category_name = next((cat['name'] for cat in categories if cat['id'] == category_id), "Категория")
 
-    keyboard.append([InlineKeyboardButton("⬅️ Назад к категориям", callback_data='menu')])
+    keyboard.append([InlineKeyboardButton("⬅️ Назад к категориям", callback_data='back_categories')])
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     if dishes:
@@ -250,19 +254,21 @@ async def view_sheet(query, sheet_type):
         sheet_name = "Go Лист" if sheet_type == 'go' else "Start Лист"
         text = f"<b>{sheet_name}:</b>\n\n{sheet['content']}"
 
-        keyboard = [[InlineKeyboardButton("⬅️ Назад", callback_data='sheet')]]
+        keyboard = [[InlineKeyboardButton("⬅️ Назад", callback_data='back_sheet')]]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
         await query.edit_message_text(text=text, parse_mode='HTML', reply_markup=reply_markup)
     else:
-        await query.edit_message_text(text="Лист не найден.")
+        keyboard = [[InlineKeyboardButton("⬅️ Назад", callback_data='back_sheet')]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(text="Лист не найден.", reply_markup=reply_markup)
 
 
 async def choose_sheet_type(query):
     keyboard = [
         [InlineKeyboardButton("Go Лист", callback_data='set_go')],
         [InlineKeyboardButton("Start Лист", callback_data='set_start')],
-        [InlineKeyboardButton("⬅️ Назад", callback_data='sheet')]
+        [InlineKeyboardButton("⬅️ Назад", callback_data='back_sheet')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text(text="Какой лист обновляем?", reply_markup=reply_markup)
@@ -285,18 +291,27 @@ async def send_schedule_photo(query):
     # Проверяем, что file_data существует и file_id не пустой
     if file_data and file_data.get('file_id') and file_data['file_id'].strip():
         try:
+            keyboard = [[InlineKeyboardButton("⬅️ Назад", callback_data='back_schedule')]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+
             # Отправляем фото как новое сообщение
             await query.message.reply_photo(
                 photo=file_data['file_id'],
-                caption="📅 График работы\n\n⬅️ Используйте кнопку 'Назад' в основном меню",
+                caption="📅 График работы",
+                reply_markup=reply_markup
             )
         except Exception as e:
             logger.error(f"❌ Ошибка при отправке фото графика: {e}")
+            keyboard = [[InlineKeyboardButton("⬅️ Назад", callback_data='back_schedule')]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
             await query.message.reply_text(
-                text="❌ Ошибка при загрузке графика. Попробуйте обновить его."
+                text="❌ Ошибка при загрузке графика. Попробуйте обновить его.",
+                reply_markup=reply_markup
             )
     else:
-        await query.edit_message_text(text="📅 График еще не загружен.")
+        keyboard = [[InlineKeyboardButton("⬅️ Назад", callback_data='back_schedule')]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(text="📅 График еще не загружен.", reply_markup=reply_markup)
 
 
 # --- ФУНКЦИИ ДЛЯ ПОСАДКИ ---
@@ -306,18 +321,27 @@ async def show_seating(query):
     # Проверяем, что file_data существует и file_id не пустой
     if file_data and file_data.get('file_id') and file_data['file_id'].strip():
         try:
+            keyboard = [[InlineKeyboardButton("⬅️ Назад", callback_data='back_main')]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+
             # Отправляем фото как новое сообщение
             await query.message.reply_photo(
                 photo=file_data['file_id'],
-                caption="🪑 Схема посадки\n\n⬅️ Используйте кнопку 'Назад' в основном меню",
+                caption="🪑 Схема посадки",
+                reply_markup=reply_markup
             )
         except Exception as e:
             logger.error(f"❌ Ошибка при отправке фото посадки: {e}")
+            keyboard = [[InlineKeyboardButton("⬅️ Назад", callback_data='back_main')]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
             await query.message.reply_text(
-                text="❌ Ошибка при загрузке схемы посадки. Попробуйте обновить её."
+                text="❌ Ошибка при загрузке схемы посадки. Попробуйте обновить её.",
+                reply_markup=reply_markup
             )
     else:
-        await query.edit_message_text(text="🪑 Схема посадки еще не загружена.")
+        keyboard = [[InlineKeyboardButton("⬅️ Назад", callback_data='back_main')]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(text="🪑 Схема посадки еще не загружена.", reply_markup=reply_markup)
 
 
 # --- ФУНКЦИИ ДЛЯ ОБРАТНОЙ СВЯЗИ С ВЫБОРОМ СТОЛА ---
@@ -365,7 +389,7 @@ async def choose_table(query, context):
     if row:
         keyboard.append(row)
 
-    keyboard.append([InlineKeyboardButton("⬅️ Назад", callback_data='feedback_main')])
+    keyboard.append([InlineKeyboardButton("⬅️ Назад", callback_data='back_feedback')])
 
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text(
@@ -379,7 +403,7 @@ async def show_feedback_list(query):
     stats = DatabaseManager.get_feedback_stats()
 
     if not feedback_list:
-        keyboard = [[InlineKeyboardButton("⬅️ Назад", callback_data='feedback_main')]]
+        keyboard = [[InlineKeyboardButton("⬅️ Назад", callback_data='back_feedback')]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_text(
             text="📭 Отзывов пока нет",
@@ -409,7 +433,7 @@ async def show_feedback_list(query):
             callback_data=f"feedback_view_{feedback['id']}"
         )])
 
-    keyboard.append([InlineKeyboardButton("⬅️ Назад", callback_data='feedback_main')])
+    keyboard.append([InlineKeyboardButton("⬅️ Назад", callback_data='back_feedback')])
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     await query.edit_message_text(text=text, reply_markup=reply_markup)
@@ -677,6 +701,7 @@ def main():
         print("🪑 Доступны столы: 01-37 (красивая сетка 5x8)")
         print("⏰ Время отображается в Саратовском часовом поясе")
         print("🧹 Автоочистка отзывов каждые 24 часа")
+        print("🔙 Добавлены кнопки 'Назад' во всех меню")
 
         application.run_polling()
 
