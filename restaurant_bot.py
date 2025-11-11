@@ -195,8 +195,8 @@ async def show_dish_detail(query, dish_id):
         # Форматируем информацию о блюде
         text = f"<b>{dish['name']}</b>\n\n"
 
-        # Время приготовления
-        cooking_time = DatabaseManager.format_cooking_time()
+        # Время приготовления (передаем название блюда)
+        cooking_time = DatabaseManager.format_cooking_time(dish.get('name'))
         text += f"{cooking_time}\n\n"
 
         # Острота
@@ -226,6 +226,14 @@ async def show_dish_detail(query, dish_id):
                 text += "👥 Подойдет на общий стол\n"
             if 'Содержит лактозу' in features:
                 text += "🥛 Содержит лактозу\n"
+            if 'Подается с перчатками' in features:
+                text += "🧤 Подается с перчатками\n"
+            if 'Подается с тарелкой теплой воды' in features:
+                text += "♨️ Подается с тарелкой теплой воды\n"
+            if 'Острота не регулируется' in features:
+                text += "⚡ Острота не регулируется\n"
+            if 'Соевый соус средней остроты' in features:
+                text += "🍶 Соевый соус средней остроты\n"
 
         # Кнопка назад
         keyboard = [[InlineKeyboardButton(
@@ -256,7 +264,6 @@ async def show_dish_detail(query, dish_id):
         )
     else:
         await query.edit_message_text(text="Блюдо не найдено.")
-
 
 # --- ФУНКЦИИ ДЛЯ ЛИСТА ---
 async def show_sheet_options(query):
