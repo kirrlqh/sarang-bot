@@ -566,34 +566,7 @@ async def view_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❌ У вас нет прав для выполнения этой команды.")
             return
 
-        # Автоматическая очистка перед показом
-        deleted_count = DatabaseManager.auto_cleanup_feedback()
 
-        feedback_list = DatabaseManager.get_all_feedback()
-
-        if not feedback_list:
-            if deleted_count > 0:
-                await update.message.reply_text(f"📝 Отзывов нет. Удалено {deleted_count} старых отзывов.")
-            else:
-                await update.message.reply_text("📝 Отзывов пока нет.")
-            return
-
-        feedback_text = f"📝 Все отзывы (удалено {deleted_count} старых):\n\n"
-
-        for feedback in feedback_list:
-            created_at = feedback.get('created_at', '')[:16]  # Берем дату и время
-            table_number = feedback['table_number']
-            comment = feedback['comment']
-            full_name = feedback.get('full_name', 'Неизвестно')
-            username = feedback.get('username', 'Не указан')
-
-            feedback_text += f"🪑 Стол {table_number}\n"
-            feedback_text += f"👤 {full_name} (@{username})\n"
-            feedback_text += f"📅 {created_at}\n"
-            feedback_text += f"💬 {comment}\n"
-            feedback_text += "─" * 30 + "\n"
-
-        await update.message.reply_text(feedback_text)
 
 # Обработка фото
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
