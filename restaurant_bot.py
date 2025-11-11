@@ -98,10 +98,16 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['waiting_for_schedule'] = True
         await query.edit_message_text(text="Отправьте новое фото графика:")
 
-    # Обратная связь
+    # Обратная связь - выбор стола
     elif data == 'send_feedback':
+        await choose_table(query, context)
+
+    elif data.startswith('table_'):
+        table_number = int(data.split('_')[1])
+        context.user_data['selected_table'] = table_number
         context.user_data['waiting_for_feedback'] = True
-        await query.edit_message_text(text="💬 Напишите ваш отзыв, предложение или жалобу:")
+        await query.edit_message_text(
+            text=f"🪑 Выбран стол: {table_number}\n\n💬 Теперь напишите ваш отзыв, предложение или жалобу:")
 
     elif data == 'view_feedback':
         if not DatabaseManager.is_admin(query.from_user.id):
@@ -314,7 +320,7 @@ async def show_seating(query):
         await query.edit_message_text(text="🪑 Схема посадки еще не загружена.")
 
 
-# --- ФУНКЦИИ ДЛЯ ОБРАТНОЙ СВЯЗИ ---
+# --- ФУНКЦИИ ДЛЯ ОБРАТНОЙ СВЯЗИ С ВЫБОРОМ СТОЛА ---
 async def show_feedback_options(query):
     keyboard = [
         [InlineKeyboardButton("💌 Оставить отзыв", callback_data='send_feedback')],
@@ -333,6 +339,27 @@ async def show_feedback_options(query):
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text(
         text="💬 Обратная связь\n\nЗдесь вы можете оставить отзыв, предложение или сообщить о проблеме:",
+        reply_markup=reply_markup
+    )
+
+
+async def choose_table(query, context):
+    """Выбор стола от 1 до 37"""
+    keyboard = []
+
+    # Создаем кнопки столов по 6 в ряд
+    tables = list(range(1, 38))
+    for i in range(0, len(tables), 6):
+        row = []
+        for table in tables[i:i + 6]:
+            row.append(InlineKeyboardButton(f"🪑 {table}", callback_data=f"table_{table}"))
+        keyboard.append(row)
+
+    keyboard.append([InlineKeyboardButton("⬅️ Назад", callback_data='feedback_main')])
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.edit_message_text(
+        text="🪑 Выберите номер вашего стола (от 1 до 37):",
         reply_markup=reply_markup
     )
 
@@ -356,11 +383,12 @@ async def show_feedback_list(query):
     keyboard = []
     for feedback in feedback_list[:10]:  # Показываем последние 10 отзывов
         status_icon = "🆕" if feedback.get('status') == 'new' else "📖"
+        table_number = feedback.get('table_number', '?')
         user_info = f"@{feedback.get('username', 'без username')}" if feedback.get(
             'username') else f"ID: {feedback['user_id']}"
         date = feedback.get('created_at', '')[:16] if feedback.get('created_at') else 'дата неизвестна'
 
-        btn_text = f"{status_icon} {user_info} - {date}"
+        btn_text = f"{status_icon} Стол {table_number} - {date}"
         if len(btn_text) > 50:
             btn_text = btn_text[:47] + "..."
 
@@ -390,14 +418,16 @@ async def show_feedback_detail(query, feedback_id):
     }
 
     status = status_text.get(feedback.get('status'), '❓ Неизвестен')
+    table_number = feedback.get('table_number', 'Не указан')
     user_info = f"@{feedback.get('username')}" if feedback.get('username') else f"ID: {feedback['user_id']}"
     full_name = feedback.get('full_name', 'Не указано')
     date = feedback.get('created_at', '')[:19] if feedback.get('created_at') else 'дата неизвестна'
 
     text = f"💬 <b>Отзыв #{feedback['id']}</b>\n\n"
+    text += f"🪑 <b>Стол:</b> {table_number}\n"
     text += f"👤 <b>Пользователь:</b> {user_info}\n"
     text += f"📛 <b>Имя:</b> {full_name}\n"
-    text += f"📅 <b>Дата:</b> {date}\n"
+    text += f"📅 <b>Дата и время:</b> {date}\n"
     text += f"📊 <b>Статус:</b> {status}\n\n"
     text += f"💭 <b>Сообщение:</b>\n{feedback['message']}"
 
@@ -539,11 +569,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Обработка обратной связи
     if context.user_data.get('waiting_for_feedback'):
+        table_number = context.user_data.get('selected_table', 'Не указан')
         username = update.message.from_user.username or ""
         full_name = f"{update.message.from_user.first_name or ''} {update.message.from_user.last_name or ''}".strip()
 
-        success = DatabaseManager.add_feedback(user_id, username, full_name, text)
+        success = DatabaseManager.add_feedback(user_id, username, full_name, text, table_number)
 
+        # Очищаем данные пользователя
+        if 'selected_table' in context.user_data:
+            del context.user_data['selected_table']
         del context.user_data['waiting_for_feedback']
 
         if success:
@@ -553,7 +587,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 try:
                     await context.bot.send_message(
                         chat_id=admin['user_id'],
-                        text=f"🆕 Новый отзыв от @{username or 'без username'}\n\n{text[:500]}..."
+                        text=f"🆕 Новый отзыв от @{username or 'без username'}\n🪑 Стол: {table_number}\n\n{text[:500]}..."
                     )
                 except Exception as e:
                     logger.error(f"Ошибка при уведомлении админа: {e}")
@@ -625,7 +659,8 @@ def main():
         print("   /add_admin <user_id> - Добавить администратора")
         print("   /list_admins - Показать список администраторов")
         print("   /remove_admin <user_id> - Удалить администратора")
-        print("💬 Система обратной связи активирована")
+        print("💬 Система обратной связи с выбором стола активирована")
+        print("🪑 Доступны столы: 1-37")
         print("🧹 Автоочистка отзывов каждые 24 часа")
 
         application.run_polling()

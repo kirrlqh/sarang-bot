@@ -158,22 +158,23 @@ class DatabaseManager:
             print(f"❌ Ошибка при получении списка администраторов: {e}")
             return []
 
-    # --- СИСТЕМА ОБРАТНОЙ СВЯЗИ ---
+    # --- СИСТЕМА ОБРАТНОЙ СВЯЗИ С ВЫБОРОМ СТОЛА ---
 
     @staticmethod
-    def add_feedback(user_id, username, full_name, message, message_type='feedback'):
-        """Добавить отзыв или обратную связь"""
+    def add_feedback(user_id, username, full_name, message, table_number, message_type='feedback'):
+        """Добавить отзыв или обратную связь с номером стола"""
         try:
             response = supabase.table("feedback").insert({
                 "user_id": user_id,
                 "username": username,
                 "full_name": full_name,
                 "message": message,
+                "table_number": table_number,
                 "message_type": message_type,  # 'feedback', 'complaint', 'suggestion'
                 "status": 'new'  # 'new', 'read', 'replied'
             }).execute()
 
-            print(f"✅ Отзыв от пользователя {user_id} добавлен в базу")
+            print(f"✅ Отзыв от пользователя {user_id} (стол {table_number}) добавлен в базу")
             return True
         except Exception as e:
             print(f"❌ Ошибка при добавлении отзыва: {e}")
