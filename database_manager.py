@@ -169,3 +169,50 @@ class DatabaseManager:
         except Exception as e:
             print(f"❌ Ошибка при получении списка администраторов: {e}")
             return []
+
+        @staticmethod
+        def add_feedback(table_number, user_id, username, full_name, comment):
+            """Добавить отзыв о столе"""
+            try:
+                response = supabase.table("feedback").insert({
+                    "table_number": table_number,
+                    "user_id": user_id,
+                    "username": username,
+                    "full_name": full_name,
+                    "comment": comment
+                }).execute()
+
+                print(f"✅ Отзыв добавлен для стола {table_number}")
+                return True
+            except Exception as e:
+                print(f"❌ Ошибка при добавлении отзыва: {e}")
+                return False
+
+        @staticmethod
+        def get_all_feedback():
+            """Получить все отзывы"""
+            try:
+                response = supabase.table("feedback").select("*").order("created_at", desc=True).execute()
+                return response.data
+            except Exception as e:
+                print(f"❌ Ошибка при получении отзывов: {e}")
+                return []
+
+        @staticmethod
+        def delete_old_feedback(days=7):
+            """Удалить старые отзывы (старше указанного количества дней)"""
+            try:
+                response = supabase.table("feedback").delete().lt("created_at",
+                                                                  f"now() - interval '{days} days'").execute()
+
+                deleted_count = len(response.data) if response.data else 0
+                print(f"✅ Удалено {deleted_count} старых отзывов")
+                return deleted_count
+            except Exception as e:
+                print(f"❌ Ошибка при удалении старых отзывов: {e}")
+                return 0
+
+        @staticmethod
+        def auto_cleanup_feedback():
+            """Автоматическая очистка отзывов старше 7 дней"""
+            return DatabaseManager.delete_old_feedback(days=7)

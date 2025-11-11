@@ -42,7 +42,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("🍽 Меню", callback_data='menu')],
         [InlineKeyboardButton("📋 Лист", callback_data='sheet')],
         [InlineKeyboardButton("📅 График", callback_data='schedule')],
-        [InlineKeyboardButton("🪑 Посадка", callback_data='seating')]
+        [InlineKeyboardButton("🪑 Посадка", callback_data='seating')],
+        [InlineKeyboardButton("📝 Обратная связь", callback_data='feedback')]  # Новая кнопка
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -103,6 +104,55 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['waiting_for_schedule'] = True
         await query.edit_message_text(text="Отправьте новое фото графика:")
 
+    # Обратная связь - выбор стола
+    elif data.startswith('feedback_table_'):
+        table_number = int(data.split('_')[2])
+        context.user_data['feedback_table'] = table_number
+        context.user_data['waiting_for_feedback'] = True
+
+        await query.edit_message_text(
+            f"🪑 Выбран стол {table_number}\n\n"
+            f"Напишите ваш комментарий:"
+        )
+
+    # Отмена обратной связи
+    elif data == 'feedback_cancel':
+        if 'waiting_for_feedback' in context.user_data:
+            del context.user_data['waiting_for_feedback']
+        await query.edit_message_text("❌ Отзыв отменен")
+
+    # Кнопка обратной связи из главного меню
+    elif data == 'feedback':
+        # Используем query.message для ответа на callback
+        context.user_data['feedback_user'] = {
+            'user_id': query.from_user.id,
+            'username': query.from_user.username or "Не указан",
+            'full_name': f"{query.from_user.first_name or ''} {query.from_user.last_name or ''}".strip()
+        }
+
+        # Автоматическая очистка старых отзывов
+        DatabaseManager.auto_cleanup_feedback()
+
+        # Создаем клавиатуру с номерами столов (1-37)
+        keyboard = []
+        row = []
+        for i in range(1, 38):  # Столы с 1 по 37
+            row.append(InlineKeyboardButton(f"Стол {i}", callback_data=f"feedback_table_{i}"))
+            if i % 4 == 0:  # 4 кнопки в ряд
+                keyboard.append(row)
+                row = []
+
+        if row:
+            keyboard.append(row)
+
+        keyboard.append([InlineKeyboardButton("❌ Отмена", callback_data='feedback_cancel')])
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        await query.edit_message_text(
+            "📝 Обратная связь\n\n"
+            "Выберите номер стола:",
+            reply_markup=reply_markup
+        )
     # Возврат в главное меню
     elif data == 'back_main':
         await start(update, context)
@@ -423,6 +473,35 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     text = update.message.text
 
+    # Обработка комментария для обратной связи
+    if context.user_data.get('waiting_for_feedback'):
+        table_number = context.user_data.get('feedback_table')
+        user_data = context.user_data.get('feedback_user', {})
+
+        if table_number and user_data and text.strip():
+            success = DatabaseManager.add_feedback(
+                table_number=table_number,
+                user_id=user_data['user_id'],
+                username=user_data['username'],
+                full_name=user_data['full_name'],
+                comment=text.strip()
+            )
+
+            # Очищаем контекст
+            del context.user_data['waiting_for_feedback']
+            del context.user_data['feedback_table']
+            del context.user_data['feedback_user']
+
+            if success:
+                await update.message.reply_text(
+                    f"✅ Спасибо за отзыв!\n\n"
+                    f"🪑 Стол {table_number}\n"
+                    f"💬 Ваш комментарий учтен"
+                )
+            else:
+                await update.message.reply_text("❌ Ошибка при сохранении отзыва")
+        return
+
     if context.user_data.get('waiting_for_sheet_update'):
         sheet_type = context.user_data['waiting_for_sheet_update']
         success = DatabaseManager.update_sheet(sheet_type, text, user_id)
@@ -437,6 +516,84 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❌ Ошибка при обновлении листа.")
         return
 
+
+async def feedback_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Начать процесс оставления отзыва"""
+    user_id = update.message.from_user.id
+    username = update.message.from_user.username or "Не указан"
+    full_name = f"{update.message.from_user.first_name or ''} {update.message.from_user.last_name or ''}".strip()
+
+    # Сохраняем данные пользователя в контекст
+    context.user_data['feedback_user'] = {
+        'user_id': user_id,
+        'username': username,
+        'full_name': full_name
+    }
+
+    # Автоматическая очистка старых отзывов
+    deleted_count = DatabaseManager.auto_cleanup_feedback()
+    if deleted_count > 0:
+        logger.info(f"🔄 Автоматически удалено {deleted_count} старых отзывов")
+
+    # Создаем клавиатуру с номерами столов (1-37)
+    keyboard = []
+    row = []
+    for i in range(1, 38):  # Столы с 1 по 37
+        row.append(InlineKeyboardButton(f"Стол {i}", callback_data=f"feedback_table_{i}"))
+        if i % 4 == 0:  # 4 кнопки в ряд
+            keyboard.append(row)
+            row = []
+
+    # Добавляем последний ряд если нужно
+    if row:
+        keyboard.append(row)
+
+    keyboard.append([InlineKeyboardButton("❌ Отмена", callback_data='feedback_cancel')])
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    await update.message.reply_text(
+        "📝 Обратная связь\n\n"
+        "Выберите номер стола:",
+        reply_markup=reply_markup
+    )
+
+
+async def view_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Показать все отзывы (только для админов)"""
+        user_id = update.message.from_user.id
+
+        if not DatabaseManager.is_admin(user_id):
+            await update.message.reply_text("❌ У вас нет прав для выполнения этой команды.")
+            return
+
+        # Автоматическая очистка перед показом
+        deleted_count = DatabaseManager.auto_cleanup_feedback()
+
+        feedback_list = DatabaseManager.get_all_feedback()
+
+        if not feedback_list:
+            if deleted_count > 0:
+                await update.message.reply_text(f"📝 Отзывов нет. Удалено {deleted_count} старых отзывов.")
+            else:
+                await update.message.reply_text("📝 Отзывов пока нет.")
+            return
+
+        feedback_text = f"📝 Все отзывы (удалено {deleted_count} старых):\n\n"
+
+        for feedback in feedback_list:
+            created_at = feedback.get('created_at', '')[:16]  # Берем дату и время
+            table_number = feedback['table_number']
+            comment = feedback['comment']
+            full_name = feedback.get('full_name', 'Неизвестно')
+            username = feedback.get('username', 'Не указан')
+
+            feedback_text += f"🪑 Стол {table_number}\n"
+            feedback_text += f"👤 {full_name} (@{username})\n"
+            feedback_text += f"📅 {created_at}\n"
+            feedback_text += f"💬 {comment}\n"
+            feedback_text += "─" * 30 + "\n"
+
+        await update.message.reply_text(feedback_text)
 
 # Обработка фото
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -486,9 +643,15 @@ def main():
         application.add_handler(CommandHandler("add_admin", add_admin))
         application.add_handler(CommandHandler("list_admins", list_admins))
         application.add_handler(CommandHandler("remove_admin", remove_admin))
+        application.add_handler(CommandHandler("view_feedback", view_feedback))  # Команда для просмотра отзывов
         application.add_handler(CallbackQueryHandler(button))
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
         application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+
+        # Автоматическая очистка при запуске
+        deleted_count = DatabaseManager.auto_cleanup_feedback()
+        if deleted_count > 0:
+            print(f"🔄 При запуске удалено {deleted_count} старых отзывов")
 
         # Запуск бота
         logger.info("🤖 Бот запускается на Railway...")
@@ -498,6 +661,9 @@ def main():
         print("   /add_admin <user_id> - Добавить администратора")
         print("   /list_admins - Показать список администраторов")
         print("   /remove_admin <user_id> - Удалить администратора")
+        print("   /view_feedback - Показать все отзывы")
+        print("📝 Команды пользователя:")
+        print("   Нажмите 'Обратная связь' в меню")
 
         application.run_polling()
 
