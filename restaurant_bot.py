@@ -192,18 +192,40 @@ async def show_dish_detail(query, dish_id):
     dish = DatabaseManager.get_dish(dish_id)
 
     if dish:
+        # Форматируем информацию о блюде
         text = f"<b>{dish['name']}</b>\n\n"
 
+        # Время приготовления
+        cooking_time = DatabaseManager.format_cooking_time()
+        text += f"{cooking_time}\n\n"
+
+        # Острота
+        spiciness = DatabaseManager.format_spiciness(dish.get('spiciness', 'Не острое'))
+        if spiciness:
+            text += f"<b>Острота:</b> {spiciness}\n\n"
+
+        # Состав
         if dish.get('composition'):
-            text += f"<i>Состав:</i>\n{dish['composition']}\n\n"
+            text += f"<i>🍽️ Состав:</i>\n{dish['composition']}\n\n"
 
+        # Описание
         if dish.get('description'):
-            text += f"<i>Описание:</i>\n{dish['description']}\n\n"
+            text += f"<i>📝 Описание:</i>\n{dish['description']}\n\n"
 
-        if dish.get('price'):
-            text += f"<i>Цена:</i> {dish['price']} руб."
-        else:
-            text += "<i>Цена:</i> Не указана"
+        # Аллергены
+        allergens = DatabaseManager.format_allergens(dish.get('allergens'))
+        if allergens:
+            text += f"<b>⚠️ Аллергены:</b>\n{allergens}\n\n"
+
+        # Особенности
+        if dish.get('features'):
+            features = dish['features']
+            if 'Подходит детям' in features:
+                text += "👶 Подходит детям\n"
+            if 'Подойдет на общий стол' in features:
+                text += "👥 Подойдет на общий стол\n"
+            if 'Содержит лактозу' in features:
+                text += "🥛 Содержит лактозу\n"
 
         # Кнопка назад
         keyboard = [[InlineKeyboardButton(
@@ -700,8 +722,10 @@ def main():
         print("💬 Система обратной связи с выбором стола активирована")
         print("🪑 Доступны столы: 01-37 (красивая сетка 5x8)")
         print("⏰ Время отображается в Саратовском часовом поясе")
-        print("🧹 Автоочистка отзывов каждые 24 часа")
+        print("🌶️ Красивое отображение остроты и аллергенов")
+        print("⏱️ Время приготовления: 15 минут")
         print("🔙 Добавлены кнопки 'Назад' во всех меню")
+        print("🍽️ Обновленное меню с салатами")
 
         application.run_polling()
 
