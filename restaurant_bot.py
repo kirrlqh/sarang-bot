@@ -131,7 +131,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         }
 
         # Автоматическая очистка старых отзывов
-        DatabaseManager.auto_cleanup_feedback()
+
 
         # Создаем клавиатуру с номерами столов (1-37)
         keyboard = []
@@ -530,10 +530,6 @@ async def feedback_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         'full_name': full_name
     }
 
-    # Автоматическая очистка старых отзывов
-    deleted_count = DatabaseManager.auto_cleanup_feedback()
-    if deleted_count > 0:
-        logger.info(f"🔄 Автоматически удалено {deleted_count} старых отзывов")
 
     # Создаем клавиатуру с номерами столов (1-37)
     keyboard = []
@@ -621,10 +617,7 @@ def main():
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
         application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
 
-        # Автоматическая очистка при запуске
-        deleted_count = DatabaseManager.auto_cleanup_feedback()
-        if deleted_count > 0:
-            print(f"🔄 При запуске удалено {deleted_count} старых отзывов")
+
 
         # Запуск бота
         logger.info("🤖 Бот запускается на Railway...")
