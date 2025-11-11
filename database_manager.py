@@ -1,4 +1,7 @@
 from config import supabase, ADMIN_ID
+import threading
+import time
+from datetime import datetime, timedelta
 
 
 class DatabaseManager:
@@ -146,21 +149,6 @@ class DatabaseManager:
             return False
 
     @staticmethod
-    def update_admin_info(user_id, username="", full_name=""):
-        """Обновить информацию об администраторе"""
-        try:
-            response = supabase.table("admins").update({
-                "username": username,
-                "full_name": full_name
-            }).eq("user_id", user_id).execute()
-
-            print(f"✅ Информация администратора {user_id} обновлена")
-            return True
-        except Exception as e:
-            print(f"❌ Ошибка при обновлении информации администратора: {e}")
-            return False
-
-    @staticmethod
     def get_all_admins():
         """Получить всех администраторов"""
         try:
@@ -170,49 +158,125 @@ class DatabaseManager:
             print(f"❌ Ошибка при получении списка администраторов: {e}")
             return []
 
-        @staticmethod
-        def add_feedback(table_number, user_id, username, full_name, comment):
-            """Добавить отзыв о столе"""
+    # --- СИСТЕМА ОБРАТНОЙ СВЯЗИ ---
+
+    @staticmethod
+    def add_feedback(user_id, username, full_name, message, message_type='feedback'):
+        """Добавить отзыв или обратную связь"""
+        try:
+            response = supabase.table("feedback").insert({
+                "user_id": user_id,
+                "username": username,
+                "full_name": full_name,
+                "message": message,
+                "message_type": message_type,  # 'feedback', 'complaint', 'suggestion'
+                "status": 'new'  # 'new', 'read', 'replied'
+            }).execute()
+
+            print(f"✅ Отзыв от пользователя {user_id} добавлен в базу")
+            return True
+        except Exception as e:
+            print(f"❌ Ошибка при добавлении отзыва: {e}")
+            return False
+
+    @staticmethod
+    def get_all_feedback(status=None):
+        """Получить все отзывы (для админов)"""
+        try:
+            query = supabase.table("feedback").select("*").order("created_at", desc=True)
+
+            if status:
+                query = query.eq("status", status)
+
+            response = query.execute()
+            return response.data
+        except Exception as e:
+            print(f"❌ Ошибка при получении отзывов: {e}")
+            return []
+
+    @staticmethod
+    def get_feedback_stats():
+        """Получить статистику по отзывам"""
+        try:
+            feedback = DatabaseManager.get_all_feedback()
+            total = len(feedback)
+            new_count = len([f for f in feedback if f.get('status') == 'new'])
+            read_count = len([f for f in feedback if f.get('status') == 'read'])
+
+            return {
+                'total': total,
+                'new': new_count,
+                'read': read_count
+            }
+        except Exception as e:
+            print(f"❌ Ошибка при получении статистики отзывов: {e}")
+            return {'total': 0, 'new': 0, 'read': 0}
+
+    @staticmethod
+    def update_feedback_status(feedback_id, status):
+        """Обновить статус отзыва"""
+        try:
+            response = supabase.table("feedback").update({
+                "status": status
+            }).eq("id", feedback_id).execute()
+
+            return True
+        except Exception as e:
+            print(f"❌ Ошибка при обновлении статуса отзыва: {e}")
+            return False
+
+    @staticmethod
+    def delete_feedback(feedback_id):
+        """Удалить отзыв"""
+        try:
+            response = supabase.table("feedback").delete().eq("id", feedback_id).execute()
+            print(f"✅ Отзыв {feedback_id} удален")
+            return True
+        except Exception as e:
+            print(f"❌ Ошибка при удалении отзыва: {e}")
+            return False
+
+    @staticmethod
+    def cleanup_old_feedback(days=1):
+        """Очистить старые отзывы (старше указанного количества дней)"""
+        try:
+            # Вычисляем дату, старше которой удаляем отзывы
+            cutoff_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d %H:%M:%S')
+
+            # Удаляем отзывы старше указанной даты
+            response = supabase.table("feedback").delete().lt('created_at', cutoff_date).execute()
+
+            deleted_count = len(response.data) if response.data else 0
+            print(f"✅ Автоочистка: удалено {deleted_count} отзывов старше {days} дней")
+            return deleted_count
+        except Exception as e:
+            print(f"❌ Ошибка при очистке старых отзывов: {e}")
+            return 0
+
+
+# --- ФОНОВАЯ ЗАДАЧА ДЛЯ ОЧИСТКИ ---
+
+def start_cleanup_scheduler():
+    """Запустить фоновую задачу для автоматической очистки"""
+
+    def cleanup_task():
+        while True:
             try:
-                response = supabase.table("feedback").insert({
-                    "table_number": table_number,
-                    "user_id": user_id,
-                    "username": username,
-                    "full_name": full_name,
-                    "comment": comment
-                }).execute()
+                # Ожидаем 24 часа
+                time.sleep(24 * 60 * 60)  # 24 часа в секундах
 
-                print(f"✅ Отзыв добавлен для стола {table_number}")
-                return True
+                # Выполняем очистку отзывов старше 30 дней
+                DatabaseManager.cleanup_old_feedback(days=30)
+
             except Exception as e:
-                print(f"❌ Ошибка при добавлении отзыва: {e}")
-                return False
+                print(f"❌ Ошибка в фоновой задаче очистки: {e}")
+                time.sleep(60 * 60)  # Ждем 1 час при ошибке
 
-        @staticmethod
-        def get_all_feedback():
-            """Получить все отзывы"""
-            try:
-                response = supabase.table("feedback").select("*").order("created_at", desc=True).execute()
-                return response.data
-            except Exception as e:
-                print(f"❌ Ошибка при получении отзывов: {e}")
-                return []
+    # Запускаем в отдельном потоке
+    cleanup_thread = threading.Thread(target=cleanup_task, daemon=True)
+    cleanup_thread.start()
+    print("✅ Фоновая задача автоочистки запущена")
 
-        @staticmethod
-        def delete_old_feedback(days=7):
-            """Удалить старые отзывы (старше указанного количества дней)"""
-            try:
-                response = supabase.table("feedback").delete().lt("created_at",
-                                                                  f"now() - interval '{days} days'").execute()
 
-                deleted_count = len(response.data) if response.data else 0
-                print(f"✅ Удалено {deleted_count} старых отзывов")
-                return deleted_count
-            except Exception as e:
-                print(f"❌ Ошибка при удалении старых отзывов: {e}")
-                return 0
-
-        @staticmethod
-        def auto_cleanup_feedback():
-            """Автоматическая очистка отзывов старше 7 дней"""
-            return DatabaseManager.delete_old_feedback(days=7)
+# Запускаем очистку при импорте
+start_cleanup_scheduler()
