@@ -344,15 +344,25 @@ async def show_feedback_options(query):
 
 
 async def choose_table(query, context):
-    """Выбор стола от 1 до 37"""
-    keyboard = []
-
-    # Создаем кнопки столов по 6 в ряд
+    """Выбор стола от 1 до 37 с нормальной сеткой"""
+    # Создаем сетку 5x8 для 37 столов (последний ряд будет неполным)
     tables = list(range(1, 38))
-    for i in range(0, len(tables), 6):
-        row = []
-        for table in tables[i:i + 6]:
-            row.append(InlineKeyboardButton(f"🪑 {table}", callback_data=f"table_{table}"))
+
+    keyboard = []
+    row = []
+
+    for i, table in enumerate(tables, 1):
+        # Форматируем номер стола с ведущим нулем для красоты
+        table_text = f"{table:02d}"
+        row.append(InlineKeyboardButton(f"🪑 {table_text}", callback_data=f"table_{table}"))
+
+        # Создаем новую строку каждые 5 столов
+        if i % 5 == 0:
+            keyboard.append(row)
+            row = []
+
+    # Добавляем последнюю неполную строку если есть
+    if row:
         keyboard.append(row)
 
     keyboard.append([InlineKeyboardButton("⬅️ Назад", callback_data='feedback_main')])
@@ -386,9 +396,11 @@ async def show_feedback_list(query):
         table_number = feedback.get('table_number', '?')
         user_info = f"@{feedback.get('username', 'без username')}" if feedback.get(
             'username') else f"ID: {feedback['user_id']}"
-        date = feedback.get('created_at', '')[:16] if feedback.get('created_at') else 'дата неизвестна'
 
-        btn_text = f"{status_icon} Стол {table_number} - {date}"
+        # Используем Саратовское время
+        saratov_time = DatabaseManager.format_saratov_time(feedback.get('created_at'))
+
+        btn_text = f"{status_icon} Стол {table_number:02d} - {saratov_time}"
         if len(btn_text) > 50:
             btn_text = btn_text[:47] + "..."
 
@@ -421,13 +433,15 @@ async def show_feedback_detail(query, feedback_id):
     table_number = feedback.get('table_number', 'Не указан')
     user_info = f"@{feedback.get('username')}" if feedback.get('username') else f"ID: {feedback['user_id']}"
     full_name = feedback.get('full_name', 'Не указано')
-    date = feedback.get('created_at', '')[:19] if feedback.get('created_at') else 'дата неизвестна'
+
+    # Используем Саратовское время
+    saratov_time = DatabaseManager.format_saratov_time(feedback.get('created_at'))
 
     text = f"💬 <b>Отзыв #{feedback['id']}</b>\n\n"
-    text += f"🪑 <b>Стол:</b> {table_number}\n"
+    text += f"🪑 <b>Стол:</b> {table_number:02d}\n"
     text += f"👤 <b>Пользователь:</b> {user_info}\n"
     text += f"📛 <b>Имя:</b> {full_name}\n"
-    text += f"📅 <b>Дата и время:</b> {date}\n"
+    text += f"📅 <b>Дата и время (Саратов):</b> {saratov_time}\n"
     text += f"📊 <b>Статус:</b> {status}\n\n"
     text += f"💭 <b>Сообщение:</b>\n{feedback['message']}"
 
@@ -587,7 +601,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 try:
                     await context.bot.send_message(
                         chat_id=admin['user_id'],
-                        text=f"🆕 Новый отзыв от @{username or 'без username'}\n🪑 Стол: {table_number}\n\n{text[:500]}..."
+                        text=f"🆕 Новый отзыв от @{username or 'без username'}\n🪑 Стол: {table_number:02d}\n\n{text[:500]}..."
                     )
                 except Exception as e:
                     logger.error(f"Ошибка при уведомлении админа: {e}")
@@ -660,7 +674,8 @@ def main():
         print("   /list_admins - Показать список администраторов")
         print("   /remove_admin <user_id> - Удалить администратора")
         print("💬 Система обратной связи с выбором стола активирована")
-        print("🪑 Доступны столы: 1-37")
+        print("🪑 Доступны столы: 01-37 (красивая сетка 5x8)")
+        print("⏰ Время отображается в Саратовском часовом поясе")
         print("🧹 Автоочистка отзывов каждые 24 часа")
 
         application.run_polling()

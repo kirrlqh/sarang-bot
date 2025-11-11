@@ -2,6 +2,7 @@ from config import supabase, ADMIN_ID
 import threading
 import time
 from datetime import datetime, timedelta
+import pytz
 
 
 class DatabaseManager:
@@ -253,6 +254,26 @@ class DatabaseManager:
         except Exception as e:
             print(f"❌ Ошибка при очистке старых отзывов: {e}")
             return 0
+
+    @staticmethod
+    def format_saratov_time(utc_time_str):
+        """Форматирует время в Саратовский часовой пояс"""
+        try:
+            if not utc_time_str:
+                return "время неизвестно"
+
+            # Парсим UTC время из базы данных
+            utc_time = datetime.fromisoformat(utc_time_str.replace('Z', '+00:00'))
+
+            # Конвертируем в Саратовское время (UTC+4)
+            saratov_tz = pytz.timezone('Europe/Saratov')
+            saratov_time = utc_time.astimezone(saratov_tz)
+
+            # Форматируем в удобный вид
+            return saratov_time.strftime("%d.%m.%Y %H:%M")
+        except Exception as e:
+            print(f"❌ Ошибка при форматировании времени: {e}")
+            return utc_time_str[:16] if utc_time_str else "время неизвестно"
 
 
 # --- ФОНОВАЯ ЗАДАЧА ДЛЯ ОЧИСТКИ ---
