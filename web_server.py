@@ -1,7 +1,15 @@
 import os
 import http.server
 import socketserver
-from threading import Thread
+
+print("🔄 WEB SERVER: Starting...")
+print(f"📁 WEB SERVER: Current directory: {os.getcwd()}")
+
+try:
+    files = os.listdir('static')
+    print(f"📁 WEB SERVER: Static files: {files}")
+except Exception as e:
+    print(f"❌ WEB SERVER: Error listing static: {e}")
 
 
 class MyHttpRequestHandler(http.server.SimpleHTTPRequestHandler):
@@ -9,7 +17,6 @@ class MyHttpRequestHandler(http.server.SimpleHTTPRequestHandler):
         super().__init__(*args, directory="static", **kwargs)
 
     def do_GET(self):
-        # Всегда отдаем index.html для любых путей (SPA)
         if self.path != '/' and '.' not in self.path:
             self.path = '/'
         return super().do_GET()
@@ -17,10 +24,11 @@ class MyHttpRequestHandler(http.server.SimpleHTTPRequestHandler):
 
 def start_web_server():
     PORT = int(os.getenv('PORT', 8000))
+    print(f"🌐 WEB SERVER: Starting on port {PORT}")
 
     with socketserver.TCPServer(("", PORT), MyHttpRequestHandler) as httpd:
-        print(f"🌐 Web server running on port {PORT}")
-        print(f"📱 Mini App available at: http://localhost:{PORT}")
+        print(f"✅ WEB SERVER: Running on port {PORT}")
+        print(f"📱 WEB SERVER: Mini App available!")
         httpd.serve_forever()
 
 
