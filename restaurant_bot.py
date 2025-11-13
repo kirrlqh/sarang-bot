@@ -44,6 +44,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.callback_query.edit_message_text('Выберите опцию:', reply_markup=reply_markup)
 
 
+async def serve_mini_app(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Отправляет ссылку на Mini App"""
+    # ЗАМЕНИТЕ эту строку на ваш реальный Railway домен
+    mini_app_url = "https://your-app-name.railway.app"  # ← ЗАМЕНИТЕ НА ВАШ ДОМЕН
+
+    await update.message.reply_text(
+        f"📱 Откройте наше меню в Mini App:\n{mini_app_url}"
+    )
+
 # Обработчик нажатий на кнопки
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -747,6 +756,7 @@ def main():
         application.add_handler(CallbackQueryHandler(button))
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
         application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+        application.add_handler(CommandHandler("menu", serve_mini_app))
 
         # Запуск бота
         logger.info("🤖 Бот запускается на Railway...")

@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Меню Ресторана</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Заголовок -->
+        <header class="header">
+            <h1 class="restaurant-name">🍚 Seoul Kitchen</h1>
+            <p class="subtitle">Аутентичная корейская кухня</p>
+        </header>
+
+        <!-- Вкладки категорий -->
+        <nav class="tabs" id="categoriesTabs">
+            <!-- Вкладки будут загружены динамически -->
+        </nav>
+
+        <!-- Контент блюд -->
+        <main class="dishes-container" id="dishesContainer">
+            <div class="loading" id="loading">Загрузка меню...</div>
+            <div class="dishes-grid" id="dishesGrid"></div>
+        </main>
+
+        <!-- Модальное окно для деталей блюда -->
+        <div class="modal" id="dishModal">
+            <div class="modal-content">
+                <span class="close">&times;</span>
+                <div class="modal-body" id="modalBody"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="config.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
